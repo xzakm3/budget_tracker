@@ -67,9 +67,10 @@ function Overview({ onNavigate }: PageProps = {}): React.JSX.Element {
    *
    * @param transactionData - Updated transaction data
    */
-  function handleUpdateTransaction(transactionData: Omit<Transaction, 'id'>): void {
+  async function handleUpdateTransaction(transactionData: Omit<Transaction, 'id'>): Promise<void> {
     if (editingTransaction) {
-      updateTransaction(editingTransaction.id, transactionData)
+      await updateTransaction(editingTransaction.id, transactionData)
+      closeEditForm()
     }
   }
 
@@ -79,15 +80,15 @@ function Overview({ onNavigate }: PageProps = {}): React.JSX.Element {
    * @param transactionId - ID of the transaction to delete
    * @param transactionName - Name of the transaction for confirmation
    */
-  function handleDeleteTransaction(transactionId: string, transactionName: string): void {
+  async function handleDeleteTransaction(transactionId: string, transactionName: string): Promise<void> {
     if (window.confirm(`Are you sure you want to delete the transaction "${transactionName}"?`)) {
-      deleteTransaction(transactionId)
+      await deleteTransaction(transactionId)
     }
   }
 
-  const income = calculateIncome()
-  const expenses = calculateExpenses()
-  const balance = calculateBalance()
+  const income = Number(calculateIncome()) || 0
+  const expenses = Number(calculateExpenses()) || 0
+  const balance = Number(calculateBalance()) || 0
 
   return (
     <div className="p-8">
@@ -228,7 +229,10 @@ function Overview({ onNavigate }: PageProps = {}): React.JSX.Element {
       <TransactionForm
         isOpen={isFormOpen}
         onClose={closeForm}
-        onSubmit={addTransaction}
+        onSubmit={async (transactionData) => {
+          await addTransaction(transactionData)
+          closeForm()
+        }}
       />
 
       <EditTransactionForm

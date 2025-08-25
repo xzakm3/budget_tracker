@@ -8,11 +8,12 @@ import { CURRENCY_SYMBOLS, CURRENCY_CODES, DEFAULT_CURRENCY } from '../constants
  * @returns Formatted currency string with symbol and two decimal places
  */
 export function formatCurrency(
-  amount: number,
+  amount: number | string,
   currency: typeof CURRENCY_CODES[keyof typeof CURRENCY_CODES] = DEFAULT_CURRENCY
 ): string {
   const symbol = CURRENCY_SYMBOLS[currency as keyof typeof CURRENCY_SYMBOLS]
-  return `${symbol}${amount.toFixed(2)}`
+  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
+  return `${symbol}${numAmount.toFixed(2)}`
 }
 
 /**

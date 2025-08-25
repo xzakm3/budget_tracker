@@ -54,9 +54,10 @@ function Categories(): React.JSX.Element {
    *
    * @param categoryData - Updated category data
    */
-  function handleUpdateCategory(categoryData: Omit<Category, 'id' | 'color'>): void {
+  async function handleUpdateCategory(categoryData: Omit<Category, 'id' | 'color'>): Promise<void> {
     if (editingCategory) {
-      updateCategory(editingCategory.id, categoryData)
+      await updateCategory(editingCategory.id, categoryData)
+      closeEditForm()
     }
   }
 
@@ -66,9 +67,9 @@ function Categories(): React.JSX.Element {
    * @param categoryId - ID of the category to delete
    * @param categoryName - Name of the category for confirmation
    */
-  function handleDeleteCategory(categoryId: string, categoryName: string): void {
+  async function handleDeleteCategory(categoryId: string, categoryName: string): Promise<void> {
     if (window.confirm(`Are you sure you want to delete the category "${categoryName}"?`)) {
-      removeCategory(categoryId)
+      await removeCategory(categoryId)
     }
   }
 
@@ -150,7 +151,10 @@ function Categories(): React.JSX.Element {
       <CategoryForm
         isOpen={isFormOpen}
         onClose={closeForm}
-        onSubmit={addCategory}
+        onSubmit={async (categoryData) => {
+          await addCategory(categoryData)
+          closeForm()
+        }}
       />
 
       <EditCategoryForm

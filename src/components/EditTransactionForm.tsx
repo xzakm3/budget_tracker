@@ -29,11 +29,20 @@ function EditTransactionForm({ isOpen, transaction, onClose, onSubmit }: EditTra
   // Update form data when transaction changes
   useEffect(() => {
     if (transaction) {
+      // Convert date to YYYY-MM-DD format for HTML date input
+      const formatDateForInput = (dateString: string): string => {
+        const date = new Date(dateString)
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+      }
+
       setFormData({
         name: transaction.name,
         amount: transaction.amount.toString(),
         currency: transaction.currency,
-        date: transaction.date,
+        date: formatDateForInput(transaction.date),
         note: transaction.note,
         type: transaction.type,
         categoryId: transaction.categoryId
