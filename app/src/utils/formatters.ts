@@ -11,6 +11,10 @@ export function formatCurrency(
   amount: number | string,
   currency: typeof CURRENCY_CODES[keyof typeof CURRENCY_CODES] = DEFAULT_CURRENCY
 ): string {
+  if (typeof amount === 'string' && amount.trim() === '') {
+    throw new Error('Amount cannot be empty')
+  }
+  
   const symbol = CURRENCY_SYMBOLS[currency as keyof typeof CURRENCY_SYMBOLS]
   const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
   return `${symbol}${numAmount.toFixed(2)}`
