@@ -1,12 +1,12 @@
 import { Request, Response } from 'express'
-import { TransactionService } from '../services/transactionService'
+import { ServiceContainer } from '../container/ServiceContainer'
 import { ApiResponse, CreateTransactionRequest, UpdateTransactionRequest, CURRENCY_CODES } from '../types'
-
-const transactionService = new TransactionService()
 
 export const transactionController = {
   async getAll(req: Request, res: Response): Promise<void> {
     try {
+      const serviceContainer = ServiceContainer.getInstance()
+      const transactionService = serviceContainer.getTransactionService()
       const transactions = await transactionService.getAllTransactions()
       const response: ApiResponse<typeof transactions> = {
         success: true,
@@ -26,6 +26,8 @@ export const transactionController = {
   async getById(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params
+      const serviceContainer = ServiceContainer.getInstance()
+      const transactionService = serviceContainer.getTransactionService()
       const transaction = await transactionService.getTransactionById(id)
       
       if (!transaction) {
@@ -111,6 +113,8 @@ export const transactionController = {
         return
       }
 
+      const serviceContainer = ServiceContainer.getInstance()
+      const transactionService = serviceContainer.getTransactionService()
       const transaction = await transactionService.createTransaction(transactionData)
       const response: ApiResponse<typeof transaction> = {
         success: true,
@@ -187,6 +191,8 @@ export const transactionController = {
         return
       }
 
+      const serviceContainer = ServiceContainer.getInstance()
+      const transactionService = serviceContainer.getTransactionService()
       const transaction = await transactionService.updateTransaction(id, transactionData)
       
       if (!transaction) {
@@ -216,6 +222,8 @@ export const transactionController = {
   async delete(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params
+      const serviceContainer = ServiceContainer.getInstance()
+      const transactionService = serviceContainer.getTransactionService()
       const success = await transactionService.deleteTransaction(id)
       
       if (!success) {

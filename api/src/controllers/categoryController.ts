@@ -1,12 +1,12 @@
 import { Request, Response } from 'express'
-import { CategoryService } from '../services/categoryService'
+import { ServiceContainer } from '../container/ServiceContainer'
 import { ApiResponse, CreateCategoryRequest, UpdateCategoryRequest } from '../types'
-
-const categoryService = new CategoryService()
 
 export const categoryController = {
   async getAll(req: Request, res: Response): Promise<void> {
     try {
+      const serviceContainer = ServiceContainer.getInstance()
+      const categoryService = serviceContainer.getCategoryService()
       const categories = await categoryService.getAllCategories()
       const response: ApiResponse<typeof categories> = {
         success: true,
@@ -26,6 +26,8 @@ export const categoryController = {
   async getById(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params
+      const serviceContainer = ServiceContainer.getInstance()
+      const categoryService = serviceContainer.getCategoryService()
       const category = await categoryService.getCategoryById(id)
       
       if (!category) {
@@ -65,6 +67,8 @@ export const categoryController = {
         return
       }
 
+      const serviceContainer = ServiceContainer.getInstance()
+      const categoryService = serviceContainer.getCategoryService()
       const category = await categoryService.createCategory(categoryData)
       const response: ApiResponse<typeof category> = {
         success: true,
@@ -95,6 +99,8 @@ export const categoryController = {
         return
       }
 
+      const serviceContainer = ServiceContainer.getInstance()
+      const categoryService = serviceContainer.getCategoryService()
       const category = await categoryService.updateCategory(id, categoryData)
       
       if (!category) {
@@ -124,6 +130,8 @@ export const categoryController = {
   async delete(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params
+      const serviceContainer = ServiceContainer.getInstance()
+      const categoryService = serviceContainer.getCategoryService()
       const success = await categoryService.deleteCategory(id)
       
       if (!success) {
