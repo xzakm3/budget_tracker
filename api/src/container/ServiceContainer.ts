@@ -34,14 +34,14 @@ export class ServiceContainer {
 
   public getCategoryService(): CategoryService {
     if (!this._categoryService) {
-      this._categoryService = new CategoryService(this._databasePool, this._databaseConfig)
+      this._categoryService = new CategoryService(this._databaseConfig)
     }
     return this._categoryService
   }
 
   public getTransactionService(): TransactionService {
     if (!this._transactionService) {
-      this._transactionService = new TransactionService(this._databasePool, this._databaseConfig)
+      this._transactionService = new TransactionService(this._databaseConfig)
     }
     return this._transactionService
   }

@@ -1,5 +1,6 @@
-import { IDatabasePool, IDatabaseConfig } from '../interfaces/IDatabaseClient'
+import { IDatabaseConfig } from '../interfaces/IDatabaseClient'
 import { Category, CreateCategoryRequest, UpdateCategoryRequest } from '../types'
+import DatabaseConnectionSingleton from '../config/databaseConnection'
 
 const CATEGORY_COLORS = [
   'bg-blue-100 text-blue-800 border-blue-200',
@@ -23,81 +24,99 @@ const CATEGORY_COLORS = [
 ]
 
 export class CategoryService {
-  private client: any
+  private databasePool = DatabaseConnectionSingleton.getInstance()
 
-  constructor(
-    private databasePool: IDatabasePool,
-    private databaseConfig: IDatabaseConfig
-  ) {
-    this.initializeClient()
-  }
+  constructor(private databaseConfig: IDatabaseConfig) {}
 
-  private async initializeClient() {
-    this.client = await this.databasePool.connect()
+  private async getClient() {
+    return await this.databasePool.connect()
   }
 
   async getAllCategories(): Promise<Category[]> {
-    const result = await this.client.query(`
-      SELECT id, name, color, deleted_at, created_at, updated_at
-      FROM ${this.databaseConfig.categoriesTable}
-      WHERE deleted_at IS NULL
-      ORDER BY created_at ASC
-    `)
-    return result.rows
+    const client = await this.getClient()
+    try {
+      const result = await client.query(`
+        SELECT id, name, color, deleted_at, created_at, updated_at
+        FROM ${this.databaseConfig.categoriesTable}
+        WHERE deleted_at IS NULL
+        ORDER BY created_at ASC
+      `)
+      return result.rows
+    } finally {
+      client.release()
+    }
   }
 
   async getCategoryById(id: string): Promise<Category | null> {
-    const result = await this.client.query(`
-      SELECT id, name, color, deleted_at, created_at, updated_at
-      FROM ${this.databaseConfig.categoriesTable}
-      WHERE id = $1 AND deleted_at IS NULL
-    `, [id])
-    return result.rows[0] || null
+    const client = await this.getClient()
+    try {
+      const result = await client.query(`
+        SELECT id, name, color, deleted_at, created_at, updated_at
+        FROM ${this.databaseConfig.categoriesTable}
+        WHERE id = $1 AND deleted_at IS NULL
+      `, [id])
+      return result.rows[0] || null
+    } finally {
+      client.release()
+    }
   }
 
   async createCategory(categoryData: CreateCategoryRequest): Promise<Category> {
-    // Get current category count to assign color
-    const countResult = await this.client.query(`
-      SELECT COUNT(*) as count
-      FROM ${this.databaseConfig.categoriesTable}
-      WHERE deleted_at IS NULL
-    `)
-    const count = parseInt(countResult.rows[0].count)
-    const color = CATEGORY_COLORS[count % CATEGORY_COLORS.length]
+    const client = await this.getClient()
+    try {
+      // Get current category count to assign color
+      const countResult = await client.query(`
+        SELECT COUNT(*) as count
+        FROM ${this.databaseConfig.categoriesTable}
+        WHERE deleted_at IS NULL
+      `)
+      const count = parseInt(countResult.rows[0].count)
+      const color = CATEGORY_COLORS[count % CATEGORY_COLORS.length]
 
-    const result = await this.client.query(`
-      INSERT INTO ${this.databaseConfig.categoriesTable} (name, color)
-      VALUES ($1, $2)
-      RETURNING id, name, color, deleted_at, created_at, updated_at
-    `, [categoryData.name, color])
-    
-    return result.rows[0]
+      const result = await client.query(`
+        INSERT INTO ${this.databaseConfig.categoriesTable} (name, color)
+        VALUES ($1, $2)
+        RETURNING id, name, color, deleted_at, created_at, updated_at
+      `, [categoryData.name, color])
+      
+      return result.rows[0]
+    } finally {
+      client.release()
+    }
   }
 
   async updateCategory(id: string, categoryData: UpdateCategoryRequest): Promise<Category | null> {
-    const result = await this.client.query(`
-      UPDATE ${this.databaseConfig.categoriesTable}
-      SET name = $2
-      WHERE id = $1 AND deleted_at IS NULL
-      RETURNING id, name, color, deleted_at, created_at, updated_at
-    `, [id, categoryData.name])
-    
-    return result.rows[0] || null
+    const client = await this.getClient()
+    try {
+      const result = await client.query(`
+        UPDATE ${this.databaseConfig.categoriesTable}
+        SET name = $2
+        WHERE id = $1 AND deleted_at IS NULL
+        RETURNING id, name, color, deleted_at, created_at, updated_at
+      `, [id, categoryData.name])
+      
+      return result.rows[0] || null
+    } finally {
+      client.release()
+    }
   }
 
   async deleteCategory(id: string): Promise<boolean> {
-    const result = await this.client.query(`
-      UPDATE ${this.databaseConfig.categoriesTable}
-      SET deleted_at = CURRENT_TIMESTAMP
-      WHERE id = $1 AND deleted_at IS NULL
-    `, [id])
-    
-    return (result.rowCount ?? 0) > 0
+    const client = await this.getClient()
+    try {
+      const result = await client.query(`
+        UPDATE ${this.databaseConfig.categoriesTable}
+        SET deleted_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND deleted_at IS NULL
+      `, [id])
+      
+      return (result.rowCount ?? 0) > 0
+    } finally {
+      client.release()
+    }
   }
 
   async destroy() {
-    if (this.client) {
-      this.client.release()
-    }
+    // No longer needed since we get client per operation
   }
 }
