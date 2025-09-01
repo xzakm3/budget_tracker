@@ -4,9 +4,14 @@ import helmet from 'helmet'
 import morgan from 'morgan'
 import categoryRoutes from './routes/categoryRoutes'
 import transactionRoutes from './routes/transactionRoutes'
+import { ServiceContainer } from './container/ServiceContainer'
 
 const app = express()
 const PORT = process.env.PORT || 3001
+
+// Initialize service container based on environment
+const isTestEnvironment = process.env.NODE_ENV === 'test'
+ServiceContainer.getInstance(isTestEnvironment)
 
 // Middleware
 app.use(helmet())
