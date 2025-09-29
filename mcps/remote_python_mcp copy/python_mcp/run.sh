@@ -1,0 +1,1 @@
+docker run -p 8002:8001 python_mcp_remote
