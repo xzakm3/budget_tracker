@@ -1,6 +1,2 @@
-node_modules
-.cursor
-package-lock.json
-
-dist/
-**dist/
+node_modules/*
+*/node_modules/*
