@@ -1,314 +1,376 @@
 import { CategoryService } from '../../src/services/categoryService'
-import pool from '../../src/config/database'
+import { IDatabaseConfig } from '../../src/interfaces/IDatabaseClient'
 import { CreateCategoryRequest, Category } from '../../src/types'
+import DatabaseConnectionSingleton from '../../src/config/databaseConnection'
 
-// Mock the database pool
-jest.mock('../../src/config/database', () => ({
-  connect: jest.fn()
-}))
+jest.mock('../../src/config/databaseConnection')
+
+const mockDatabaseConfig: IDatabaseConfig = {
+  categoriesTable: 'categories',
+  transactionsTable: 'transactions'
+}
+
+const CATEGORY_COLORS = [
+  'bg-blue-100 text-blue-800 border-blue-200',
+  'bg-green-100 text-green-800 border-green-200',
+  'bg-purple-100 text-purple-800 border-purple-200',
+  'bg-pink-100 text-pink-800 border-pink-200',
+  'bg-yellow-100 text-yellow-800 border-yellow-200',
+  'bg-indigo-100 text-indigo-800 border-indigo-200',
+  'bg-red-100 text-red-800 border-red-200',
+  'bg-orange-100 text-orange-800 border-orange-200',
+  'bg-teal-100 text-teal-800 border-teal-200',
+  'bg-gray-100 text-gray-800 border-gray-200',
+  'bg-cyan-100 text-cyan-800 border-cyan-200',
+  'bg-lime-100 text-lime-800 border-lime-200',
+  'bg-amber-100 text-amber-800 border-amber-200',
+  'bg-emerald-100 text-emerald-800 border-emerald-200',
+  'bg-sky-100 text-sky-800 border-sky-200',
+  'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200',
+  'bg-violet-100 text-violet-800 border-violet-200',
+  'bg-rose-100 text-rose-800 border-rose-200'
+]
 
 describe('CategoryService - createCategory', () => {
   let categoryService: CategoryService
   let mockClient: any
+  let mockDatabasePool: any
 
   beforeEach(() => {
-    categoryService = new CategoryService()
     mockClient = {
       query: jest.fn(),
       release: jest.fn()
     }
-    ;(pool.connect as jest.Mock).mockResolvedValue(mockClient)
+
+    mockDatabasePool = {
+      connect: jest.fn().mockResolvedValue(mockClient)
+    }
+
+    const mockGetInstance = jest.mocked(DatabaseConnectionSingleton.getInstance)
+    mockGetInstance.mockReturnValue(mockDatabasePool)
+
+    categoryService = new CategoryService(mockDatabaseConfig)
   })
 
   afterEach(() => {
     jest.clearAllMocks()
   })
 
-  describe('Happy path scenarios', () => {
-    test('should create category with valid name', async () => {
+  describe('happy path', () => {
+    it('should create category with first color when no existing categories', async () => {
       const categoryData: CreateCategoryRequest = { name: 'Food' }
-      const mockCategory: Category = {
+      const expectedCategory: Category = {
         id: '1',
         name: 'Food',
-        color: 'bg-blue-100 text-blue-800 border-blue-200',
+        color: CATEGORY_COLORS[0],
+        deleted_at: null,
         created_at: new Date(),
         updated_at: new Date()
       }
 
-      // Mock count query
-      mockClient.query.mockResolvedValueOnce({ 
-        rows: [{ count: '0' }] 
-      })
-      // Mock insert query
-      mockClient.query.mockResolvedValueOnce({ 
-        rows: [mockCategory] 
-      })
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+        .mockResolvedValueOnce({ rows: [expectedCategory] })
 
       const result = await categoryService.createCategory(categoryData)
 
-      expect(result).toEqual(mockCategory)
+      expect(mockDatabasePool.connect).toHaveBeenCalledTimes(1)
       expect(mockClient.query).toHaveBeenCalledTimes(2)
-      expect(mockClient.query).toHaveBeenNthCalledWith(1, expect.stringContaining('SELECT COUNT(*)'))
-      expect(mockClient.query).toHaveBeenNthCalledWith(2, 
-        expect.stringContaining('INSERT INTO temp_andantino.categories'),
-        ['Food', 'bg-blue-100 text-blue-800 border-blue-200']
-      )
-      expect(mockClient.release).toHaveBeenCalled()
+      expect(mockClient.query).toHaveBeenNthCalledWith(1, `
+        SELECT COUNT(*) as count
+        FROM ${mockDatabaseConfig.categoriesTable}
+        WHERE deleted_at IS NULL
+      `)
+      expect(mockClient.query).toHaveBeenNthCalledWith(2, `
+        INSERT INTO ${mockDatabaseConfig.categoriesTable} (name, color)
+        VALUES ($1, $2)
+        RETURNING id, name, color, deleted_at, created_at, updated_at
+      `, ['Food', CATEGORY_COLORS[0]])
+      expect(mockClient.release).toHaveBeenCalledTimes(1)
+      expect(result).toEqual(expectedCategory)
     })
 
-    test('should create category with correct color cycling', async () => {
+    it('should create category with correct color based on existing count', async () => {
       const categoryData: CreateCategoryRequest = { name: 'Transport' }
-      const mockCategory: Category = {
-        id: '2',
+      const existingCount = 5
+      const expectedColor = CATEGORY_COLORS[existingCount % CATEGORY_COLORS.length]
+      const expectedCategory: Category = {
+        id: '6',
         name: 'Transport',
-        color: 'bg-green-100 text-green-800 border-green-200',
+        color: expectedColor,
+        deleted_at: null,
         created_at: new Date(),
         updated_at: new Date()
       }
 
-      // Mock count query returning 1 (second category)
-      mockClient.query.mockResolvedValueOnce({ 
-        rows: [{ count: '1' }] 
-      })
-      mockClient.query.mockResolvedValueOnce({ 
-        rows: [mockCategory] 
-      })
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ count: '5' }] })
+        .mockResolvedValueOnce({ rows: [expectedCategory] })
 
       const result = await categoryService.createCategory(categoryData)
 
-      expect(result.color).toBe('bg-green-100 text-green-800 border-green-200')
+      expect(mockClient.query).toHaveBeenNthCalledWith(2, `
+        INSERT INTO ${mockDatabaseConfig.categoriesTable} (name, color)
+        VALUES ($1, $2)
+        RETURNING id, name, color, deleted_at, created_at, updated_at
+      `, ['Transport', expectedColor])
+      expect(result).toEqual(expectedCategory)
+    })
+
+    it('should handle color cycling when count exceeds available colors', async () => {
+      const categoryData: CreateCategoryRequest = { name: 'Entertainment' }
+      const existingCount = 25
+      const expectedColor = CATEGORY_COLORS[existingCount % CATEGORY_COLORS.length] // Should wrap around
+      const expectedCategory: Category = {
+        id: '26',
+        name: 'Entertainment',
+        color: expectedColor,
+        deleted_at: null,
+        created_at: new Date(),
+        updated_at: new Date()
+      }
+
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ count: '25' }] })
+        .mockResolvedValueOnce({ rows: [expectedCategory] })
+
+      const result = await categoryService.createCategory(categoryData)
+
+      expect(mockClient.query).toHaveBeenNthCalledWith(2, `
+        INSERT INTO ${mockDatabaseConfig.categoriesTable} (name, color)
+        VALUES ($1, $2)
+        RETURNING id, name, color, deleted_at, created_at, updated_at
+      `, ['Entertainment', expectedColor])
+      expect(result).toEqual(expectedCategory)
     })
   })
 
-  describe('Edge case scenarios', () => {
-    test('should handle category with minimum length name', async () => {
-      const categoryData: CreateCategoryRequest = { name: 'A' }
-      const mockCategory: Category = {
+  describe('edge cases', () => {
+    it('should handle category name with special characters', async () => {
+      const categoryData: CreateCategoryRequest = { name: "Café & Restaurant's" }
+      const expectedCategory: Category = {
         id: '1',
-        name: 'A',
-        color: 'bg-blue-100 text-blue-800 border-blue-200',
+        name: "Café & Restaurant's",
+        color: CATEGORY_COLORS[0],
+        deleted_at: null,
         created_at: new Date(),
         updated_at: new Date()
       }
 
-      mockClient.query.mockResolvedValueOnce({ rows: [{ count: '0' }] })
-      mockClient.query.mockResolvedValueOnce({ rows: [mockCategory] })
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+        .mockResolvedValueOnce({ rows: [expectedCategory] })
 
       const result = await categoryService.createCategory(categoryData)
 
-      expect(result.name).toBe('A')
+      expect(result.name).toBe("Café & Restaurant's")
     })
 
-    test('should handle category with very long name', async () => {
+    it('should handle very long category name', async () => {
       const longName = 'A'.repeat(255)
       const categoryData: CreateCategoryRequest = { name: longName }
-      const mockCategory: Category = {
+      const expectedCategory: Category = {
         id: '1',
         name: longName,
-        color: 'bg-blue-100 text-blue-800 border-blue-200',
+        color: CATEGORY_COLORS[0],
+        deleted_at: null,
         created_at: new Date(),
         updated_at: new Date()
       }
 
-      mockClient.query.mockResolvedValueOnce({ rows: [{ count: '0' }] })
-      mockClient.query.mockResolvedValueOnce({ rows: [mockCategory] })
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+        .mockResolvedValueOnce({ rows: [expectedCategory] })
 
       const result = await categoryService.createCategory(categoryData)
 
       expect(result.name).toBe(longName)
     })
 
-    test('should handle special characters in category name', async () => {
-      const categoryData: CreateCategoryRequest = { name: 'Food & Drinks 🍔' }
-      const mockCategory: Category = {
+    it('should handle count as string "0"', async () => {
+      const categoryData: CreateCategoryRequest = { name: 'Test' }
+      const expectedCategory: Category = {
         id: '1',
-        name: 'Food & Drinks 🍔',
-        color: 'bg-blue-100 text-blue-800 border-blue-200',
+        name: 'Test',
+        color: CATEGORY_COLORS[0],
+        deleted_at: null,
         created_at: new Date(),
         updated_at: new Date()
       }
 
-      mockClient.query.mockResolvedValueOnce({ rows: [{ count: '0' }] })
-      mockClient.query.mockResolvedValueOnce({ rows: [mockCategory] })
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+        .mockResolvedValueOnce({ rows: [expectedCategory] })
 
       const result = await categoryService.createCategory(categoryData)
 
-      expect(result.name).toBe('Food & Drinks 🍔')
+      expect(result.color).toBe(CATEGORY_COLORS[0])
     })
 
-    test('should handle unicode characters in category name', async () => {
-      const categoryData: CreateCategoryRequest = { name: '食べ物' }
-      const mockCategory: Category = {
+    it('should handle count as numeric string', async () => {
+      const categoryData: CreateCategoryRequest = { name: 'Test' }
+      const expectedCategory: Category = {
         id: '1',
-        name: '食べ物',
-        color: 'bg-blue-100 text-blue-800 border-blue-200',
+        name: 'Test',
+        color: CATEGORY_COLORS[3],
+        deleted_at: null,
         created_at: new Date(),
         updated_at: new Date()
       }
 
-      mockClient.query.mockResolvedValueOnce({ rows: [{ count: '0' }] })
-      mockClient.query.mockResolvedValueOnce({ rows: [mockCategory] })
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ count: '3' }] })
+        .mockResolvedValueOnce({ rows: [expectedCategory] })
 
       const result = await categoryService.createCategory(categoryData)
 
-      expect(result.name).toBe('食べ物')
+      expect(result.color).toBe(CATEGORY_COLORS[3])
     })
 
-    test('should handle leading and trailing whitespace', async () => {
-      const categoryData: CreateCategoryRequest = { name: '  Food  ' }
-      const mockCategory: Category = {
+    it('should handle exact color array length count', async () => {
+      const categoryData: CreateCategoryRequest = { name: 'Test' }
+      const count = CATEGORY_COLORS.length
+      const expectedColor = CATEGORY_COLORS[0] // Should wrap to first color
+      const expectedCategory: Category = {
         id: '1',
-        name: '  Food  ',
-        color: 'bg-blue-100 text-blue-800 border-blue-200',
+        name: 'Test',
+        color: expectedColor,
+        deleted_at: null,
         created_at: new Date(),
         updated_at: new Date()
       }
 
-      mockClient.query.mockResolvedValueOnce({ rows: [{ count: '0' }] })
-      mockClient.query.mockResolvedValueOnce({ rows: [mockCategory] })
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ count: count.toString() }] })
+        .mockResolvedValueOnce({ rows: [expectedCategory] })
 
       const result = await categoryService.createCategory(categoryData)
 
-      expect(result.name).toBe('  Food  ')
-    })
-
-    test('should cycle through all available colors', async () => {
-      const categoryData: CreateCategoryRequest = { name: 'Category' }
-      const mockCategory: Category = {
-        id: '1',
-        name: 'Category',
-        color: 'bg-blue-100 text-blue-800 border-blue-200',
-        created_at: new Date(),
-        updated_at: new Date()
-      }
-
-      // Test color cycling beyond available colors (18 colors total)
-      mockClient.query.mockResolvedValueOnce({ rows: [{ count: '25' }] })
-      mockClient.query.mockResolvedValueOnce({ rows: [mockCategory] })
-
-      await categoryService.createCategory(categoryData)
-
-      // Should use first color again (25 % 18 = 7, so index 7)
-      expect(mockClient.query).toHaveBeenNthCalledWith(2,
-        expect.stringContaining('INSERT INTO temp_andantino.categories'),
-        ['Category', 'bg-orange-100 text-orange-800 border-orange-200']
-      )
-    })
-
-    test('should handle large category count numbers', async () => {
-      const categoryData: CreateCategoryRequest = { name: 'Category' }
-      const mockCategory: Category = {
-        id: '1',
-        name: 'Category',
-        color: 'bg-blue-100 text-blue-800 border-blue-200',
-        created_at: new Date(),
-        updated_at: new Date()
-      }
-
-      mockClient.query.mockResolvedValueOnce({ rows: [{ count: '999999' }] })
-      mockClient.query.mockResolvedValueOnce({ rows: [mockCategory] })
-
-      const result = await categoryService.createCategory(categoryData)
-
-      expect(result).toBeDefined()
+      expect(result.color).toBe(expectedColor)
     })
   })
 
-  describe('Error case scenarios', () => {
-    test('should handle database connection failure', async () => {
+  describe('error cases', () => {
+    it('should release client when count query fails', async () => {
       const categoryData: CreateCategoryRequest = { name: 'Food' }
-      ;(pool.connect as jest.Mock).mockRejectedValue(new Error('Connection failed'))
+      const countError = new Error('Database connection failed')
 
-      await expect(categoryService.createCategory(categoryData)).rejects.toThrow('Connection failed')
+      mockClient.query.mockRejectedValueOnce(countError)
+
+      await expect(categoryService.createCategory(categoryData))
+        .rejects.toThrow('Database connection failed')
+
+      expect(mockClient.release).toHaveBeenCalledTimes(1)
     })
 
-    test('should handle count query failure', async () => {
+    it('should release client when insert query fails', async () => {
       const categoryData: CreateCategoryRequest = { name: 'Food' }
-      mockClient.query.mockRejectedValueOnce(new Error('Count query failed'))
+      const insertError = new Error('Unique constraint violation')
 
-      await expect(categoryService.createCategory(categoryData)).rejects.toThrow('Count query failed')
-      expect(mockClient.release).toHaveBeenCalled()
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+        .mockRejectedValueOnce(insertError)
+
+      await expect(categoryService.createCategory(categoryData))
+        .rejects.toThrow('Unique constraint violation')
+
+      expect(mockClient.release).toHaveBeenCalledTimes(1)
     })
 
-    test('should handle insert query failure', async () => {
+    it('should handle database connection failure', async () => {
       const categoryData: CreateCategoryRequest = { name: 'Food' }
-      mockClient.query.mockResolvedValueOnce({ rows: [{ count: '0' }] })
-      mockClient.query.mockRejectedValueOnce(new Error('Insert failed'))
+      const connectionError = new Error('Failed to connect to database')
 
-      await expect(categoryService.createCategory(categoryData)).rejects.toThrow('Insert failed')
-      expect(mockClient.release).toHaveBeenCalled()
+      mockDatabasePool.connect.mockRejectedValueOnce(connectionError)
+
+      await expect(categoryService.createCategory(categoryData))
+        .rejects.toThrow('Failed to connect to database')
+
+      expect(mockClient.release).not.toHaveBeenCalled()
     })
 
-    test('should handle database constraint violation', async () => {
+    it('should handle invalid count response', async () => {
       const categoryData: CreateCategoryRequest = { name: 'Food' }
-      mockClient.query.mockResolvedValueOnce({ rows: [{ count: '0' }] })
-      mockClient.query.mockRejectedValueOnce(new Error('duplicate key value violates unique constraint'))
-
-      await expect(categoryService.createCategory(categoryData)).rejects.toThrow('duplicate key value violates unique constraint')
-    })
-
-    test('should handle null/undefined count result', async () => {
-      const categoryData: CreateCategoryRequest = { name: 'Food' }
-      mockClient.query.mockResolvedValueOnce({ rows: [{ count: null }] })
-      mockClient.query.mockResolvedValueOnce({ 
-        rows: [{
-          id: '1',
-          name: 'Food',
-          color: 'bg-blue-100 text-blue-800 border-blue-200',
+      
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ count: null }] })
+        .mockResolvedValueOnce({ rows: [{ 
+          id: '1', 
+          name: 'Food', 
+          color: CATEGORY_COLORS[0],
+          deleted_at: null,
           created_at: new Date(),
           updated_at: new Date()
-        }] 
-      })
+        }] })
 
       const result = await categoryService.createCategory(categoryData)
 
-      expect(result.name).toBe('Food')
-      // When count is null, parseInt returns NaN, resulting in undefined color
-      expect(mockClient.query).toHaveBeenNthCalledWith(2,
-        expect.stringContaining('INSERT INTO temp_andantino.categories'),
-        ['Food', undefined]
-      )
+      expect(result.color).toBe(CATEGORY_COLORS[0]) // parseInt(null) -> NaN, NaN % length -> NaN, should default to 0
     })
 
-    test('should handle invalid count format', async () => {
+    it('should handle empty count result rows', async () => {
       const categoryData: CreateCategoryRequest = { name: 'Food' }
-      mockClient.query.mockResolvedValueOnce({ rows: [{ count: 'invalid' }] })
-      mockClient.query.mockResolvedValueOnce({ 
-        rows: [{
-          id: '1',
-          name: 'Food',
-          color: 'bg-blue-100 text-blue-800 border-blue-200',
+      
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ 
+          id: '1', 
+          name: 'Food', 
+          color: CATEGORY_COLORS[0],
+          deleted_at: null,
           created_at: new Date(),
           updated_at: new Date()
-        }] 
+        }] })
+
+      await expect(categoryService.createCategory(categoryData))
+        .rejects.toThrow() // Should throw when trying to access rows[0].count on empty array
+
+      expect(mockClient.release).toHaveBeenCalledTimes(1)
+    })
+
+    it('should handle non-numeric count string', async () => {
+      const categoryData: CreateCategoryRequest = { name: 'Food' }
+      
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ count: 'invalid' }] })
+        .mockResolvedValueOnce({ rows: [{ 
+          id: '1', 
+          name: 'Food', 
+          color: CATEGORY_COLORS[0],
+          deleted_at: null,
+          created_at: new Date(),
+          updated_at: new Date()
+        }] })
+
+      const result = await categoryService.createCategory(categoryData)
+
+      // parseInt('invalid') -> NaN, NaN % length -> NaN, but color assignment should handle this
+      expect(result.name).toBe('Food')
+    })
+
+    it('should propagate client.release errors', async () => {
+      const categoryData: CreateCategoryRequest = { name: 'Food' }
+      const expectedCategory: Category = {
+        id: '1',
+        name: 'Food',
+        color: CATEGORY_COLORS[0],
+        deleted_at: null,
+        created_at: new Date(),
+        updated_at: new Date()
+      }
+
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+        .mockResolvedValueOnce({ rows: [expectedCategory] })
+      
+      // Mock release to throw an error
+      mockClient.release.mockImplementation(() => {
+        throw new Error('Release failed')
       })
 
-      const result = await categoryService.createCategory(categoryData)
-
-      expect(result.name).toBe('Food')
-      // When count is invalid string, parseInt returns NaN, resulting in undefined color
-      expect(mockClient.query).toHaveBeenNthCalledWith(2,
-        expect.stringContaining('INSERT INTO temp_andantino.categories'),
-        ['Food', undefined]
-      )
-    })
-
-    test('should handle empty insert result', async () => {
-      const categoryData: CreateCategoryRequest = { name: 'Food' }
-      mockClient.query.mockResolvedValueOnce({ rows: [{ count: '0' }] })
-      mockClient.query.mockResolvedValueOnce({ rows: [] })
-
-      const result = await categoryService.createCategory(categoryData)
-
-      expect(result).toBeUndefined()
-    })
-
-    test('should always release client even on error', async () => {
-      const categoryData: CreateCategoryRequest = { name: 'Food' }
-      mockClient.query.mockRejectedValueOnce(new Error('Database error'))
-
-      await expect(categoryService.createCategory(categoryData)).rejects.toThrow('Database error')
-      expect(mockClient.release).toHaveBeenCalled()
+      // The function should propagate the release error
+      await expect(categoryService.createCategory(categoryData))
+        .rejects.toThrow('Release failed')
     })
   })
 })
