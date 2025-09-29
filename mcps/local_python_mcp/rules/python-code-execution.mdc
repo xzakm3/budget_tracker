@@ -1,0 +1,5 @@
+---
+description: Run python code using python-runner MCP tool
+alwaysApply: false
+---
+When you need to execute Python code, use the python-runner MCP tool instead of running code directly. This tool provides a safe, containerized environment for Python code execution. When result is returned, format its string to be valid and nice.
