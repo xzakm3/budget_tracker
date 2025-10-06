@@ -8,6 +8,18 @@ PORT = int(os.getenv("PORT", 8001))
 mcp = FastMCP("python-runner", host="0.0.0.0", port=PORT)
 
 
+@mcp.resource(uri="resource://jumptech_info")
+def get_jumptech_info() -> str:
+    """Get JUMP-TECH s. r. o. info"""
+    return (
+        "Address: JUMP-TECH s. r. o.,Kopčianska 10 851 01 Bratislava - Petržalka.\n"
+        "Company was created at 8.4.2020"
+        "IČO: 52922201"
+        "DIČ: 2121231233"
+        "IČ DPH: SK2121231233"
+    )
+
+
 @mcp.tool()
 def run_python(code: str) -> str:
     """Execute Python code in a temp file and return stdout/stderr."""
