@@ -27,6 +27,7 @@ def run_python(code: str) -> str:
         f.write(textwrap.dedent(code))
         path = f.name
     proc = subprocess.run(["python", path], capture_output=True, text=True, timeout=30)
+    os.unlink(path)
     return proc.stdout
 
 
