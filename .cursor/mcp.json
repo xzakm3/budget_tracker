@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "python-runner-local": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "python_mcp_local"
+      ]
+    },
+    "python-runner-remote": {
+      "url": "http://localhost:8002/mcp"
+    },
+    "Atlassian": {
+      "command": "npx mcp-remote https://mcp.atlassian.com/v1/sse",
+      "env": {}
+    }
+  }
+}
